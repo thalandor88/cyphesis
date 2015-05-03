@@ -187,28 +187,28 @@ void MemMap::del(const std::string & id)
 {
     debug( std::cout << "MemMap::del(" << id << ")" << std::endl << std::flush;);
 
-    //HACK: We currently do refcounting for Locations kept in the mind as knowledge.
-    //The result is that if an entity is removed here, it will be deleted, and any
-    //knowledge or goal referring to it will point to an invalid pointer.
-    //Then result is a segfault whenever the mind is queried.
-    //To prevent this we'll add this interim fix, where we exit from the method.
-    //This is an interim solution until we've better dealt with Locations in goals and knowledge.
-    return;
-
     long int_id = integerId(id);
 
     MemEntityDict::iterator I = m_entities.find(int_id);
     if (I != m_entities.end()) {
         MemEntity * ent = I->second;
         assert(ent != 0);
+
+        //HACK: We currently do refcounting for Locations kept in the mind as knowledge.
+        //The result is that if an entity is removed here, it will be deleted, and any
+        //knowledge or goal referring to it will point to an invalid pointer.
+        //Then result is a segfault whenever the mind is queried.
+        //To prevent this we'll add this interim fix, where we exit from the method.
+        //This is an interim solution until we've better dealt with Locations in goals and knowledge.
+
         long next = -1;
         if (m_checkIterator != m_entities.end()) {
             next = m_checkIterator->first;
         }
         m_entities.erase(I);
-
-        ent->destroy(); // should probably go here, but maybe earlier
-
+//
+//        ent->destroy(); // should probably go here, but maybe earlier
+//
         if (next != -1) {
             m_checkIterator = m_entities.find(next);
         } else {
@@ -222,7 +222,7 @@ void MemMap::del(const std::string & id)
                 m_script->hook(*J, ent);
             }
         }
-        ent->decRef();
+//        ent->decRef();
     }
 }
 
@@ -321,6 +321,38 @@ MemEntity * MemMap::updateAdd(const RootEntity & ent, const double & d)
     return entity;
 }
 
+void MemMap::addEntityMemory(const std::string& id,
+                             const std::string& memory,
+                             const Element& value)
+{
+    auto entity_memory = m_entityRelatedMemory.find(id);
+    if (entity_memory != m_entityRelatedMemory.end()) {
+        entity_memory->second[memory] = value;
+    } else {
+        m_entityRelatedMemory.insert(
+                std::make_pair(id, std::map<std::string, Element> { { memory, value } }));
+    }
+}
+
+void MemMap::recallEntityMemory(const std::string& id,
+                                const std::string& memory,
+                                Element& value) const
+{
+    auto entity_memory = m_entityRelatedMemory.find(id);
+    if (entity_memory != m_entityRelatedMemory.end()) {
+        auto specific_memory = entity_memory->second.find(memory);
+        if (specific_memory != entity_memory->second.end()) {
+            value = specific_memory->second;
+        }
+    }
+}
+
+const std::map<std::string, std::map<std::string, Element>>& MemMap::getEntityRelatedMemory() const
+{
+    return m_entityRelatedMemory;
+}
+
+
 EntityVector MemMap::findByType(const std::string & what)
 // Find an entity in our memory of a certain type
 {
@@ -380,6 +412,7 @@ EntityVector MemMap::findByLocation(const Location & loc,
 
 void MemMap::check(const double & time)
 {
+
     MemEntityDict::const_iterator entities_end = m_entities.end();
     if (m_checkIterator == entities_end) {
         m_checkIterator = m_entities.begin();
@@ -410,8 +443,15 @@ void MemMap::check(const double & time)
             } else {
                 m_checkIterator = m_entities.begin();
             }
+            //HACK: We currently do refcounting for Locations kept in the mind as knowledge.
+            //The result is that if an entity is removed here, it will be deleted, and any
+            //knowledge or goal referring to it will point to an invalid pointer.
+            //Then result is a segfault whenever the mind is queried.
+            //To prevent this we'll add this interim fix, where we won't decrease the reference.
+            //This is an interim solution until we've better dealt with Locations in goals and knowledge.
+
             // attribute of its its parent.
-            me->decRef();
+            //me->decRef();
         } else {
             debug(std::cout << me->getId() << "|" << me->getType()->name() << "|"
                             << me->lastSeen() << "|" << me->isVisible()
